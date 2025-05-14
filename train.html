@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Training</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <video id="video" width="640" height="480" autoplay muted></video>
+  <canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
+
+  <button onclick="capture()">Capture</button>
+  <button id="focusedBtn" style="display:none;" onclick="label('focused')">Focused</button>
+  <button id="distractedBtn" style="display:none;" onclick="label('distracted')">Distracted</button>
+  <button onclick="downloadJSON()">Download</button>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script src="train.js"></script>
+</body>
+</html>

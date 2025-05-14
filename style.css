@@ -1,6 +1,5 @@
 #video {
     transform: scale(-1,1);
-    display: none;
 }
 
 #canvas {
