@@ -2,10 +2,20 @@ let data = [];
 
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
+const focusedCounter = document.getElementById('focused-counter');
+const distractedCounter = document.getElementById('distracted-counter');
 const ctx = canvas.getContext('2d');
+
+let focused = 0;
+let distracted = 0; 
 
 let currentLandmarks = null;
 let faceMeshActive = true; // !labeling
+
+const leftEyeIndices = [33, 133, 160, 159, 158, 157, 173];
+const rightEyeIndices = [362, 263, 387, 386, 385, 384, 398];
+const leftIrisIndex = 468;
+const rightIrisIndex = 473;
 
 // Initialize the Face Mesh
 const faceMesh = new FaceMesh({locateFile: (file) => {
@@ -54,6 +64,28 @@ async function setupCamera() {
     }
 }
 
+function getBoundingBox(points) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of points) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+    return { minX, minY, maxX, maxY };
+}
+
+function getNormalizedIrisPosition(eyeIndices, irisIndex, landmarks) {
+    const eyePoints = eyeIndices.map(i => landmarks[i]);
+    const iris = landmarks[irisIndex];
+    const { minX, minY, maxX, maxY } = getBoundingBox(eyePoints);
+  
+    const normX = (iris.x - minX) / (maxX - minX);
+    const normY = (iris.y - minY) / (maxY - minY);
+  
+    return [normX, normY];
+}
+
 // Process frame, only if not labeling
 async function processFrames() {
     if (video.readyState === 4 && faceMeshActive) {
@@ -80,9 +112,12 @@ function capture() {
 function label(classification) {
     if (!currentLandmarks) return;
 
+    const leftXY = getNormalizedIrisPosition(leftEyeIndices, leftIrisIndex, currentLandmarks);
+    const rightXY = getNormalizedIrisPosition(rightEyeIndices, rightIrisIndex, currentLandmarks);
+
     const entry = {
         label: classification,
-        landmarks: currentLandmarks.map(p => ({ x: p.x, y: p.y, z: p.z }))
+        features: [...leftXY, ...rightXY] // [lx, ly, rx, ry]
     };
 
     data.push(entry);
@@ -94,7 +129,25 @@ function label(classification) {
     video.style.display = 'block';
     document.getElementById('focusedBtn').style.display = 'none';
     document.getElementById('distractedBtn').style.display = 'none';
+    if (classification == "focused") {
+        focused++;
+        focusedCounter.innerText = `Focused: ${focused}`;
+    } else {
+        distracted++;
+        distractedCounter.innerText = `Distracted: ${distracted}`;
+    }
 }
+
+document.addEventListener('keydown', (event) => {
+    if (event.code === 'Space') {
+      event.preventDefault(); // Prevent page scroll
+      capture();
+    } else if (event.key.toLowerCase() === 'f') {
+      label('focused');
+    } else if (event.key.toLowerCase() === 'd') {
+      label('distracted');
+    }
+});
 
 function downloadJSON() {
   const blob = new Blob([JSON.stringify(data)], { type: "application/json" });

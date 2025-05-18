@@ -1,8 +1,65 @@
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
-const leftEye = document.getElementById('left-eye');
-const rightEye = document.getElementById('right-eye');
+const prediction_text = document.getElementById("prediction-text");
 const ctx = canvas.getContext('2d');
+
+let model;
+
+async function loadModel() {
+  model = await tf.loadLayersModel('/model/tfjs_model/model.json');
+}
+
+const leftEyeIndices = [33, 133, 160, 159, 158, 157, 173];
+const rightEyeIndices = [362, 263, 387, 386, 385, 384, 398];
+const leftIrisIndex = 468;
+const rightIrisIndex = 473;
+
+function getBoundingBox(points) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of points) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function getNormalizedIrisPosition(eyeIndices, irisIndex, landmarks) {
+  const eyePoints = eyeIndices.map(i => landmarks[i]);
+  const iris = landmarks[irisIndex];
+  const { minX, minY, maxX, maxY } = getBoundingBox(eyePoints);
+
+  const normX = (iris.x - minX) / (maxX - minX);
+  const normY = (iris.y - minY) / (maxY - minY);
+
+  return [normX, normY];
+}
+
+let predictionHistory = [];
+let numPredictions = 20;
+
+async function predict(landmarks) {
+  if (!model) {
+    console.log("NO MODEL");
+    return;
+  }
+  console.log("MODEL");
+
+  const left = getNormalizedIrisPosition(leftEyeIndices, leftIrisIndex, landmarks);
+  const right = getNormalizedIrisPosition(rightEyeIndices, rightIrisIndex, landmarks);
+
+  const input = tf.tensor2d([[...left, ...right]]);
+  const prediction = model.predict(input);
+  const result = await prediction.data();
+  predictionHistory.push(result[0])
+  if (predictionHistory.length >= numPredictions) {
+    const avg = predictionHistory.reduce((a, b) => a + b) / predictionHistory.length;
+    prediction_text.innerText = avg > 0.5 ? "Distracted" : "Focused";
+    document.body.style.backgroundColor = avg > 0.5 ? "Red" : "Green";
+    predictionHistory = [];
+  }
+}
 
 // Initialize the Face Mesh
 const faceMesh = new FaceMesh({locateFile: (file) => {
@@ -21,11 +78,13 @@ faceMesh.onResults(onResults);
 
 // Start webcam
 async function setupCamera() {
+  await loadModel();
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ // Request webcam access
       video: {
         width: 640,
         height: 480,
+        frameRate: { max: 5 },
         facingMode: 'user'
       },
       audio: false
@@ -54,7 +113,7 @@ async function processFrames() {
   }
 
   // Schedule the next frame; creates loop
-  requestAnimationFrame(processFrames);
+  setTimeout(() => requestAnimationFrame(processFrames), 50);
 }
 
 // Callback function; called after faceMesh.send processes a frame
@@ -68,6 +127,7 @@ function onResults(results) {
   // Check if we have results
   if (results.multiFaceLandmarks) {
     for (const landmarks of results.multiFaceLandmarks) {
+      predict(landmarks);
       // Draw mesh
       drawConnectors(ctx, landmarks, FACEMESH_TESSELATION,
                     {color: '#C0C0C070', lineWidth: 1});
@@ -84,50 +144,8 @@ function onResults(results) {
                   {color: '#FF3030', lineWidth: 2}); // Right iris
       drawLandmarks(ctx, [landmarks[473]],
                   {color: '#30FF30', lineWidth: 2}); // Left iris
-      
-      extractEye(landmarks, 'left');
-      extractEye(landmarks, 'right');
     }
 
-  }
-}
-
-
-function extractEye(landmarks, side) {
-  const eyeIndices = side === 'left' 
-    ? [33, 133, 160, 159, 158, 157, 173, 144, 145, 153] // Approx left eye region
-    : [362, 263, 387, 386, 385, 384, 398, 373, 374, 380]; // Approx right eye region
-
-  const points = eyeIndices.map(i => landmarks[i]);
-
-  const xs = points.map(p => p.x * canvas.width);
-  const ys = points.map(p => p.y * canvas.height);
-
-  const padding = 15
-
-  const minX = Math.max(0, Math.min(...xs) - padding);
-  const maxX = Math.min(canvas.width, Math.max(...xs) + padding);
-  const minY = Math.max(0, Math.min(...ys) - padding);
-  const maxY = Math.min(canvas.height, Math.max(...ys) + padding);
-
-  const width = maxX - minX;
-  const height = maxY - minY;
-
-  // Create a temporary canvas to crop eye
-  const eyeCanvas = document.createElement('canvas');
-  eyeCanvas.width = width;
-  eyeCanvas.height = height;
-  const eyeCtx = eyeCanvas.getContext('2d');
-
-  // Crop from video
-  eyeCtx.drawImage(video, minX, minY, width, height, 0, 0, width, height);
-
-  const dataURL = eyeCanvas.toDataURL();
-
-  if (side === 'left') {
-    leftEye.src = dataURL;
-  } else {
-    rightEye.src = dataURL;
   }
 }
 
