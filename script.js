@@ -1,7 +1,7 @@
 const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const prediction_text = document.getElementById("prediction-text");
-const ctx = canvas.getContext('2d');
+// const canvas = document.getElementById('canvas');
+// const prediction_text = document.getElementById("prediction-text");
+// const ctx = canvas.getContext('2d');
 
 let model;
 
@@ -78,7 +78,7 @@ faceMesh.onResults(onResults);
 
 // Start webcam
 async function setupCamera() {
-  await loadModel();
+  // await loadModel();
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ // Request webcam access
       video: {
@@ -97,11 +97,11 @@ async function setupCamera() {
     video.onloadedmetadata = () => {
       video.play();
       // Start processing frames
-      processFrames();
+      // processFrames();
     };
 
   } catch (error) {
-    console.error('Error accessing webcam:', error);
+    console.error('Error accessing webcam:', error.name);
   }
 }
 
@@ -148,5 +148,3 @@ function onResults(results) {
 
   }
 }
-
-setupCamera();
